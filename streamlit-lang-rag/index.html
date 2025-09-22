@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pest Detection Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        #imageInput {
+            display: none;
+        }
+        .preview-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        #analyzeBtn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            display: block;
+            margin: 20px auto;
+            transition: background-color 0.3s;
+        }
+        #analyzeBtn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        #analyzeBtn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        .model-info {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Pest Detection Tool</h1>
+        <p style="text-align: center; color: #666;">Upload an image to identify pests using AI</p>
+        <div class="model-info">Powered by GROQ - LLaVA Vision Model</div>
+        
+        <div class="upload-area" onclick="document.getElementById('imageInput').click()">
+            <p>📷 Click here or drag and drop an image</p>
+            <p style="font-size: 14px; color: #666;">Supports JPG, PNG, WebP formats</p>
+        </div>
+        
+        <input type="file" id="imageInput" accept="image/*">
+        
+        <div class="preview-container" id="previewContainer" style="display: none;">
+            <img id="imagePreview" alt="Uploaded image">
+        </div>
+        
+        <button id="analyzeBtn" disabled>Analyze Image</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const GROQ_API_KEY ;
+        const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+        const MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Active vision model on GROQ
+        
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewContainer = document.getElementById('previewContainer');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const results = document.getElementById('results');
+        const uploadArea = document.querySelector('.upload-area');
+        
+        let currentImageBase64 = null;
+        let currentImageType = null;
+        
+        // File input change handler
+        imageInput.addEventListener('change', handleFileSelect);
+        
+        // Drag and drop handlers
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        // Analyze button handler
+        analyzeBtn.addEventListener('click', analyzePest);
+        
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+        
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file.');
+                return;
+            }
+            
+            currentImageType = file.type;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                previewContainer.style.display = 'block';
+                analyzeBtn.disabled = false;
+                results.style.display = 'none';
+                
+                // Store base64 data (remove data:image/...;base64, prefix)
+                currentImageBase64 = e.target.result.split(',')[1];
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        async function analyzePest(retryCount = 0) {
+            if (!currentImageBase64) {
+                alert('Please select an image first.');
+                return;
+            }
+            
+            analyzeBtn.disabled = true;
+            results.style.display = 'block';
+            results.className = '';
+            
+            if (retryCount === 0) {
+                results.innerHTML = '<div class="loading">🔍 Analyzing image for pests with GROQ AI...</div>';
+            } else {
+                results.innerHTML = `<div class="loading">🔍 Retrying analysis... (Attempt ${retryCount + 1})</div>`;
+            }
+            
+            try {
+                const response = await fetch(GROQ_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${GROQ_API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: MODEL,
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: `Please analyze this image and identify any pests present. Provide a detailed response including:
+
+1. **Pest Identification**: Name of the pest(s) if any are found
+2. **Description**: Brief description of the pest's appearance and characteristics
+3. **Threat Level**: Whether it's harmful to plants, crops, or structures
+4. **Damage Potential**: What kind of damage it can cause
+5. **Treatment Recommendations**: Basic control or treatment methods
+6. **Confidence Level**: How confident you are in this identification
+
+If no pests are visible in the image, please state that clearly and describe what you can see instead.
+
+Be specific, helpful, and accurate in your analysis.`
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: {
+                                            url: `data:${currentImageType};base64,${currentImageBase64}`
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 1000,
+                        temperature: 0.1
+                    })
+                });
+                
+                if (response.status === 429) {
+                    // Rate limit hit - wait and retry up to 3 times
+                    if (retryCount < 2) {
+                        const waitTime = (retryCount + 1) * 3000; // 3s, 6s wait times
+                        results.innerHTML = `<div class="loading">⏳ Rate limit reached. Waiting ${waitTime/1000}s before retry...</div>`;
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        return analyzePest(retryCount + 1);
+                    } else {
+                        throw new Error('Rate limit exceeded. Please wait a few minutes before trying again.');
+                    }
+                }
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorMessage = `API request failed: ${response.status}`;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        if (errorData.error && errorData.error.message) {
+                            errorMessage += ` - ${errorData.error.message}`;
+                        }
+                    } catch (e) {
+                        errorMessage += ` - ${errorText}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const data = await response.json();
+                
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    const analysis = data.choices[0].message.content;
+                    results.innerHTML = `
+                        <h3>🔬 Analysis Results:</h3>
+                        <div style="white-space: pre-wrap; line-height: 1.6;">${analysis}</div>
+                        <hr style="margin: 20px 0; opacity: 0.3;">
+                        <small style="color: #666;">Analysis powered by GROQ - ${MODEL}</small>
+                    `;
+                } else {
+                    throw new Error('No analysis results received from GROQ API');
+                }
+                
+            } catch (error) {
+                console.error('Error analyzing image:', error);
+                results.className = 'error';
+                
+                let errorMessage = error.message;
+                let suggestions = '';
+                
+                if (error.message.includes('429') || error.message.includes('Rate limit')) {
+                    suggestions = `
+                        <h4>💡 Suggestions:</h4>
+                        <ul>
+                            <li>Wait a few minutes before trying again</li>
+                            <li>GROQ has generous free limits - this should resolve quickly</li>
+                        </ul>
+                    `;
+                } else if (error.message.includes('401') || error.message.includes('403')) {
+                    suggestions = `
+                        <h4>💡 Suggestions:</h4>
+                        <ul>
+                            <li>Check if your GROQ API key is valid</li>
+                            <li>Verify the API key has the correct permissions</li>
+                            <li>Make sure you're using the correct API key format</li>
+                        </ul>
+                    `;
+                } else if (error.message.includes('400')) {
+                    suggestions = `
+                        <h4>💡 Suggestions:</h4>
+                        <ul>
+                            <li>Try a different image format (JPG, PNG)</li>
+                            <li>Make sure the image isn't too large</li>
+                            <li>Check if the image is corrupted</li>
+                        </ul>
+                    `;
+                }
+                
+                results.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p><strong>Issue:</strong> ${errorMessage}</p>
+                    ${suggestions}
+                    <hr style="margin: 20px 0; opacity: 0.3;">
+                    <small style="color: #666;">If this persists, GROQ API might be temporarily unavailable</small>
+                `;
+            } finally {
+                analyzeBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
