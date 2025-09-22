@@ -12,6 +12,11 @@ os.environ.setdefault('USER_AGENT', 'StreamlitAgricultureApp/1.0')
 from dotenv import load_dotenv
 load_dotenv()
 
+# === ADDED: safe secret helper ===
+def secret(name: str, default: str | None = None):
+    # Prefer Streamlit secrets, fall back to env (for local dev)
+    return st.secrets.get(name) if name in st.secrets else os.getenv(name, default)
+
 # LangChain components
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, WebBaseLoader
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
@@ -711,15 +716,13 @@ with st.sidebar:
 - Web Sources: {len(FARMER_URLS)} URLs
     """)
     
-    # API Key configuration
-    try:
-        groq_api_key = os.environ["GROQ_API_KEY"]
-        st.success("✅ Groq API Key loaded from environment")
-    except KeyError:
-        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
-        if not groq_api_key:
-            st.error("Please provide your Groq API Key to continue.")
-            st.stop()
+    # === REPLACED: API Key configuration (Secrets → Env) ===
+    groq_api_key = secret("GROQ_API_KEY")
+    if groq_api_key:
+        st.success("✅ Groq API Key loaded")
+    else:
+        st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets (or set env).")
+        st.stop()
     
     # Model selection
     available_models = [
@@ -877,8 +880,6 @@ Question: {input}
 
 Provide a comprehensive, practical answer with only realistic, normalized soil values:
 """)
-
-
 
         # Create enhanced retrieval chain
         document_chain = create_stuff_documents_chain(llm, prompt_template)
