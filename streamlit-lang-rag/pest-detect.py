@@ -19,6 +19,16 @@ if not GROQ_API_KEY:
     st.set_page_config(page_title="AI Agricultural Pest Identification", page_icon="🐛", layout="wide")
     st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets (or set env).")
     st.stop()
+    # --- Secrets / API key ---
+def secret(name: str, default: str | None=None):
+    # Prefer Streamlit Cloud secrets; fall back to env for local dev
+    return st.secrets.get(name) if name in st.secrets else os.getenv(name, default)
+
+GROQ_API_KEY = secret("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets.")
+    st.stop()
+
 # === end helper ===
 
 # Set page configuration

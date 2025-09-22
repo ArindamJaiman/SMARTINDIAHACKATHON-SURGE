@@ -8,7 +8,6 @@
     body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
     .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     h1 { color: #333; text-align: center; }
-    .model-info { text-align: center; color: #666; font-size: 14px; margin-top: 10px; }
     .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 40px; text-align: center; margin: 20px 0; cursor: pointer; transition: border-color .3s, background-color .3s; background:#fafafa; }
     .upload-area:hover { border-color: #007bff; }
     .upload-area.dragover { border-color: #007bff; background-color: #f0f8ff; }
@@ -18,8 +17,7 @@
     .actions { display: flex; gap: 12px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
     a.button, button { background-color: #007bff; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; text-decoration: none; }
     button.ghost { background: #e9ecef; color: #333; }
-    #results { margin-top: 20px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; display: none; }
-    .note { text-align:center; color:#888; font-size:14px; margin: 8px 0 0; }
+    .note { text-align:center; color:#888; font-size:14px; margin-top: 8px; }
     .legal { color:#777; font-size:12px; text-align:center; margin-top:24px; }
   </style>
 </head>
@@ -27,30 +25,27 @@
   <div class="container">
     <h1>🐛 Pest Detection Tool</h1>
     <p style="text-align:center;color:#666;">Upload an image to identify pests using AI</p>
-    <div class="model-info">Secure client — analysis runs on Streamlit (server-side)</div>
-
     <div class="upload-area" id="drop">
       <p>📷 Click here or drag & drop an image</p>
-      <p style="font-size:14px;color:#666;">Supports JPG, PNG, WebP formats</p>
+      <p style="font-size:14px;color:#666;">Supports JPG, PNG, WebP</p>
       <input type="file" id="imageInput" accept="image/*"/>
     </div>
 
     <div class="preview-container" id="previewContainer">
       <img id="imagePreview" alt="Uploaded image">
       <div class="actions">
-        <!-- Adjust href if your Streamlit app is at a different URL -->
+        <!-- Adjust this link if your app runs at a different path -->
         <a class="button" id="openStreamlit" href="/?page=pest" target="_blank" rel="noopener">Open in Streamlit to Analyze</a>
         <button class="ghost" id="clearBtn" type="button">Clear</button>
       </div>
-      <p class="note">After opening Streamlit, upload the same image there to run AI analysis securely with server-side keys.</p>
+      <p class="note">Analysis runs on Streamlit (server-side). No API keys on this page.</p>
     </div>
 
-    <div id="results"></div>
     <p class="legal">© Your Team • This static page intentionally performs no API calls and stores no secrets.</p>
   </div>
 
   <script>
-    // Simple, secure client: preview only. No API calls, no secrets.
+    // Preview-only client. No API calls, no secrets.
     const input = document.getElementById('imageInput');
     const drop = document.getElementById('drop');
     const previewContainer = document.getElementById('previewContainer');
