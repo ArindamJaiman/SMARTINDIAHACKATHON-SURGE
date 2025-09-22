@@ -1,12 +1,9 @@
+import streamlit as st
 import os
 import time
 import json
 import pandas as pd
 from pathlib import Path
-import sys, platform, streamlit as st
-st.caption(f"Python {sys.version.split()[0]} • {platform.system()} • Streamlit {st.__version__}")
-st.caption("Secrets present: " + ", ".join(sorted(st.secrets.keys())))
-
 
 # Set USER_AGENT to avoid warnings
 os.environ.setdefault('USER_AGENT', 'StreamlitAgricultureApp/1.0')
