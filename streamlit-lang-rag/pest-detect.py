@@ -11,6 +11,13 @@ import time
 
 # Page config first
 st.set_page_config(page_title="AI Agricultural Pest Identification", page_icon="🐛", layout="wide")
+# (line 14) — error surfacer
+import traceback
+
+def _fatal(e: Exception, where="startup"):
+    st.error(f"Unhandled error during {where}.")
+    st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+    st.stop()
 
 # Secrets/env helper
 # Load .env for local runs
@@ -25,6 +32,9 @@ def secret(name: str, default: str | None = None):
         return st.secrets[name]
     except Exception:
         return default
+
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL = "llama-3.2-11b-vision-preview"
 
 GROQ_API_KEY = secret("GROQ_API_KEY")
 if not GROQ_API_KEY:
