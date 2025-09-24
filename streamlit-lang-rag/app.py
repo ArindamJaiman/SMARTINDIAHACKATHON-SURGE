@@ -14,8 +14,16 @@ load_dotenv()
 
 # === ADDED: safe secret helper ===
 def secret(name: str, default: str | None = None):
-    # Prefer Streamlit secrets, fall back to env (for local dev)
-    return st.secrets.get(name) if name in st.secrets else os.getenv(name, default)
+    # Prefer environment variable (works locally and on most hosts)
+    v = os.getenv(name, None)
+    if v not in (None, ""):
+        return v
+    # Fall back to Streamlit secrets; swallow error if secrets.toml doesn't exist
+    try:
+        return st.secrets[name]
+    except Exception:
+        return default
+
 
 # LangChain components
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, WebBaseLoader
@@ -792,7 +800,21 @@ if "vectors" not in st.session_state:
             final_documents = text_splitter.split_documents(all_documents)
             
             # 5. Create vector store
-            st.session_state.vectors = FAISS.from_documents(final_documents, st.session_state.embeddings)
+            # Guard: do not build a vector store on an empty docset
+            if not final_documents:
+                st.error("No knowledge sources loaded (soil KB / crop cycle / web). Cannot build vectors.")
+                st.stop()
+            try:
+                st.session_state.vectors = FAISS.from_documents(final_documents, st.session_state.embeddings)
+            except Exception as e:
+                st.warning(f"FAISS failed: {e}. Falling back to in-memory Chroma.")
+                try:
+                    from langchain_community.vectorstores import Chroma
+                    st.session_state.vectors = Chroma.from_documents(final_documents, st.session_state.embeddings)
+                except Exception as e2:
+                    st.error(f"Vector store creation failed: {e2}")
+                    st.stop()
+
             
             # Summary
             soil_docs = len([d for d in final_documents if d.metadata.get("category", "").startswith("soil")])

@@ -9,38 +9,30 @@ import io
 import difflib
 import time
 
-# === Secrets/env helper (added) ===
+# Page config first
+st.set_page_config(page_title="AI Agricultural Pest Identification", page_icon="🐛", layout="wide")
+
+# Secrets/env helper
+# Load .env for local runs
+from dotenv import load_dotenv
+load_dotenv()
+
 def secret(name: str, default: str | None = None):
-    # Prefer Streamlit secrets, fall back to env (for local dev)
-    return st.secrets.get(name) if name in st.secrets else os.getenv(name, default)
+    v = os.getenv(name, None)
+    if v not in (None, ""):
+        return v
+    try:
+        return st.secrets[name]
+    except Exception:
+        return default
 
 GROQ_API_KEY = secret("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    st.set_page_config(page_title="AI Agricultural Pest Identification", page_icon="🐛", layout="wide")
-    st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets (or set env).")
-    st.stop()
-    # --- Secrets / API key ---
-def secret(name: str, default: str | None=None):
-    # Prefer Streamlit Cloud secrets; fall back to env for local dev
-    return st.secrets.get(name) if name in st.secrets else os.getenv(name, default)
-
-GROQ_API_KEY = secret("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets.")
+    st.error("GROQ_API_KEY is not set. Add it to .env (local) or Streamlit Secrets (cloud).")
     st.stop()
 
-# === end helper ===
-
-# Set page configuration
-st.set_page_config(
-    page_title="AI Agricultural Pest Identification",
-    page_icon="🐛",
-    layout="wide"
-)
-
-# Constants
-GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
+# Optional: expose to downstream libs
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 # Knowledge base paths - check multiple possible locations
 POSSIBLE_PEST_KB_PATHS = [
