@@ -4,8 +4,10 @@ langchain-community==0.2.16
 langchain-groq==0.1.10
 beautifulsoup4>=4.12
 faiss-cpu==1.12.0
+chromadb>=0.5.5
 python-dotenv>=1.0
 fastembed==0.2.7
 pandas>=2.2
 pillow>=10.0
 requests>=2.31
+groq>=0.11.0
