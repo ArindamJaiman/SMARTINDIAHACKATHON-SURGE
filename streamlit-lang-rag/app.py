@@ -12,22 +12,9 @@ os.environ.setdefault('USER_AGENT', 'StreamlitAgricultureApp/1.0')
 from dotenv import load_dotenv
 load_dotenv()
 
-# === ADDED: safe secret helper ===
-def secret(name: str, default: str | None = None):
-    # Prefer environment variable (works locally and on most hosts)
-    v = os.getenv(name, None)
-    if v not in (None, ""):
-        return v
-    # Fall back to Streamlit secrets; swallow error if secrets.toml doesn't exist
-    try:
-        return st.secrets[name]
-    except Exception:
-        return default
-
-
 # LangChain components
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, WebBaseLoader
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -42,12 +29,6 @@ st.set_page_config(
     page_icon="🌱",
     layout="wide"
 )
-import traceback
-
-def _fatal(e: Exception, where="startup"):
-    st.error(f"Unhandled error during {where}.")
-    st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
-    st.stop()
 
 # --- Knowledge Base Configuration ---
 # Check for soil knowledge base in current directory
@@ -730,13 +711,15 @@ with st.sidebar:
 - Web Sources: {len(FARMER_URLS)} URLs
     """)
     
-    # === REPLACED: API Key configuration (Secrets → Env) ===
-    groq_api_key = secret("GROQ_API_KEY")
-    if groq_api_key:
-        st.success("✅ Groq API Key loaded")
-    else:
-        st.error("Missing GROQ_API_KEY. Add it in Streamlit Secrets (or set env).")
-        st.stop()
+    # API Key configuration
+    try:
+        groq_api_key = os.environ["GROQ_API_KEY"]
+        st.success("✅ Groq API Key loaded from environment")
+    except KeyError:
+        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
+        if not groq_api_key:
+            st.error("Please provide your Groq API Key to continue.")
+            st.stop()
     
     # Model selection
     available_models = [
@@ -756,8 +739,15 @@ with st.sidebar:
 if "vectors" not in st.session_state:
     with st.spinner("🔨 Building comprehensive agricultural knowledge base..."):
         try:
+            MODEL_PATH = Path(__file__).parent.parent / "models" / "bge-small-en-v1.5"
+            @st.cache_resource(show_spinner="🔨 Loading embeddings...")
+
+
+
+            def get_embeddings():
+                return HuggingFaceEmbeddings(model_name=str(MODEL_PATH))
             # Initialize embeddings
-            st.session_state.embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+            embeddings=get_embeddings()
             
             all_documents = []
             
@@ -777,8 +767,16 @@ if "vectors" not in st.session_state:
             
             # 3. Load web-based farming information
             try:
-                web_loader = WebBaseLoader(FARMER_URLS)
-                web_documents = web_loader.load()
+                @st.cache_data(ttl=86400)  # cache for 1 day
+                def fetch_web_documents():
+                    try:
+                        loader = WebBaseLoader(FARMER_URLS)
+                        return loader.load()
+                    except Exception as e:
+                        return []
+                
+                
+                web_documents = fetch_web_documents()
                 
                 # Enhance web document metadata
                 for doc in web_documents:
@@ -798,31 +796,22 @@ if "vectors" not in st.session_state:
                 st.stop()
             
             # 4. Process all documents
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1200,
-                chunk_overlap=200,
-                separators=["\n\n", "\n", ".", " "]
-            )
-            final_documents = text_splitter.split_documents(all_documents)
+            @st.cache_resource(show_spinner="🔨 Building FAISS index...")
+            def build_vectorstore(documents, embeddings):
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1200,
+                    chunk_overlap=200,
+                    separators=["\n\n", "\n", ".", " "]
+                )
+                final_docs = text_splitter.split_documents(documents)
+                vectors = FAISS.from_documents(final_docs, embeddings)
+                return vectors, final_docs
             
-            # 5. Create vector store
-            # Guard: do not build a vector store on an empty docset
-            if not final_documents:
-                st.error("No knowledge sources loaded (soil KB / crop cycle / web). Cannot build vectors.")
-                st.stop()
-            try:
-                st.session_state.vectors = FAISS.from_documents(final_documents, st.session_state.embeddings)
-            except Exception as e:
-                st.warning(f"FAISS failed: {e}. Falling back to in-memory Chroma.")
-                try:
-                    from langchain_community.vectorstores import Chroma
-                    st.session_state.vectors = Chroma.from_documents(final_documents, st.session_state.embeddings)
-                except Exception as e2:
-                    st.error(f"Vector store creation failed: {e2}")
-                    st.stop()
-
+            # Build vectorstore
+            vectors, final_documents = build_vectorstore(all_documents, embeddings)
+            st.session_state.vectors = vectors
             
-            # Summary
+            # Summary stats
             soil_docs = len([d for d in final_documents if d.metadata.get("category", "").startswith("soil")])
             crop_docs = len([d for d in final_documents if d.metadata.get("category") == "crop_cycle"])
             scheme_docs = len([d for d in final_documents if d.metadata.get("category") == "farming_schemes"])
@@ -908,6 +897,8 @@ Question: {input}
 
 Provide a comprehensive, practical answer with only realistic, normalized soil values:
 """)
+
+
 
         # Create enhanced retrieval chain
         document_chain = create_stuff_documents_chain(llm, prompt_template)
