@@ -42,6 +42,12 @@ st.set_page_config(
     page_icon="🌱",
     layout="wide"
 )
+import traceback
+
+def _fatal(e: Exception, where="startup"):
+    st.error(f"Unhandled error during {where}.")
+    st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+    st.stop()
 
 # --- Knowledge Base Configuration ---
 # Check for soil knowledge base in current directory
